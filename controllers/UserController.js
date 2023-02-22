@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken')
 const bcrypt = require('bcrypt')
 const createUserToken = require('../helpers/create-user-token')
 const getToken = require('../helpers/get-token')
+const getUserByToken = require('../helpers/get-user-by-token')
 
 
 
@@ -147,11 +148,72 @@ module.exports = class UserController {
         
         const id = req.params.id
 
-        const user = await User.findById(id)
+        const token = getToken(req)
+        const user = await getUserByToken(token)
 
-        if(!user){
-            res.status(422).json({message: 'Usuario invalido'})
+        const {name, email, phone, password, confirmPassword} = req.body
+
+        
+
+        if(req.file) {
+            user.image = req.file.filename
+        }
+
+        if(!name) {
+            res.status(422).json({message: 'O nome é obrigatório.'})
             return
         }
+
+        user.name = name
+
+        if(!email) {
+            res.status(422).json({message: "O e-mail é  obrigatório."})
+            return
+        }
+
+        const userExist = await User.findOne({email: email})
+
+        if(user.email === email && userExist){
+            res.status(422).json({message: 'O e-mail ja está em uso.'})
+            return
+        }
+
+        user.email = email
+
+        if(!phone) {
+            res.status(422).json({message: "O telefone é obrigatório."})
+        }
+
+        user.phone = phone
+
+       
+
+        if(password !== confirmPassword){
+            res.status(422).json({message: 'As senhas não conferem.'})
+            return
+        }else if(password === confirmPassword && password != null) {
+
+            //creating a new password
+
+            const salt = await bcrypt.genSalt(12)
+            const passwordHashed = await bcrypt.hash(password, salt)
+
+
+            user.password = passwordHashed
+        }
+
+        try{
+
+             await User.findByIdAndUpdate(
+                {_id: user._id},
+                {$set: user},
+                {new: true})
+
+            res.status(200).json({message: 'Usuário atualizado com sucesso!'})
+        }catch(err){
+            res.status(500).json({message: err})
+        }
+
+        
     }
 }
